@@ -17,10 +17,10 @@ function commerce_saferpay_ipn($payment_method, $order) {
 
   $data_xml = simplexml_load_string($data);
 
-  if (!_commerce_saferpay_validate($data, $signature)) {
+  if (!_commerce_saferpay_confirm_validate($data, $signature)) {
     return FALSE;
   }
 
-  $result = _commerce_saferpay_result();
+  $result = commerce_saferpay_confirm_result();
   commerce_saferpay_process_data($order, $payment_method, $data_xml, $result);
 }
