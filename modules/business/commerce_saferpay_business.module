@@ -386,7 +386,7 @@ function commerce_saferpay_business_settle_payment($transaction, $settings) {
     }
   }
   else {
-    commerce_saferpay_business_error($response);
+    commerce_saferpay_business_error($response_string);
   }
   return FALSE;
 }
