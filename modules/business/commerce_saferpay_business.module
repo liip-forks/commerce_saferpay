@@ -121,44 +121,78 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
   $form['#method'] = 'post';
   $form['#action'] = $url;
 
-  $form['sfpCardNumber'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Card Number'),
-    '#size' => 16,
-    '#maxlength' => 16,
-    '#required' => TRUE,
+  // Default values.
+  $default = array(
+    'type' => '',
+    'owner' => '',
+    'number' => '',
+    'start_month' => '',
+    'start_year' => date('Y') - 5,
+    'exp_month' => date('m'),
+    'exp_year' => date('Y'),
+    'issue' => '',
+    'code' => '',
+    'bank' => '',
   );
 
-  $form['sfpCardExpiryMonth'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Expiration Month'),
-    '#size' => 2,
-    '#maxlength' => 2,
-    '#required' => TRUE,
-  );
-
-  $form['sfpCardExpiryYear'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Expiration Year'),
-    '#size' => 2,
-    '#maxlength' => 2,
-    '#required' => TRUE,
-  );
+  $form['#attached']['css'][] = array(drupal_get_path('module', 'commerce_payment') . '/theme/commerce_payment.theme.css');
 
   $form['CardHolder'] = array(
     '#type' => 'textfield',
-    '#title' => t('Card Holder Name'),
-    '#size' => 20,
-    '#maxlength' => 20,
+    '#title' => t('Card owner'),
+    '#default_value' => $default['owner'],
+    '#attributes' => array('autocomplete' => 'off'),
     '#required' => TRUE,
+    '#maxlength' => 64,
+    '#size' => 32,
+    '#weight' => 1,
+  );
+
+  $form['sfpCardNumber'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Card number'),
+    '#default_value' => $default['number'],
+    '#attributes' => array('autocomplete' => 'off'),
+    '#required' => TRUE,
+    '#maxlength' => 19,
+    '#size' => 20,
+    '#weight' => 2,
+  );
+
+  $form['sfpCardExpiryMonth'] = array(
+    '#type' => 'select',
+    '#title' => t('Expiration'),
+    '#options' => drupal_map_assoc(array_keys(commerce_months())),
+    '#default_value' => strlen($default['exp_month']) == 1 ? '0' . $default['exp_month'] : $default['exp_month'],
+    '#required' => TRUE,
+    '#prefix' => '<div class="commerce-credit-card-expiration">',
+    '#suffix' => '<span class="commerce-month-year-divider">/</span>',
+    '#weight' => 3,
+  );
+
+  $options = array();
+  $current_year_4 = date('Y');
+  for ($i = 0; $i < 20; $i++) {
+    $options[$current_year_4 + $i] = $current_year_4 + $i;
+  }
+
+  $form['sfpCardExpiryYear'] = array(
+    '#type' => 'select',
+    '#options' => $options,
+    '#default_value' => $default['exp_year'],
+    '#suffix' => '</div>',
+    '#weight' => 4,
   );
 
   $form['CVC'] = array(
     '#type' => 'textfield',
-    '#title' => t('CVC'),
-    '#size' => 4,
-    '#maxlength' => 4,
+    '#title' => !empty($fields['code']) ? $fields['code'] : t('Security code'),
+    '#default_value' => $default['code'],
+    '#attributes' => array('autocomplete' => 'off'),
     '#required' => TRUE,
+    '#maxlength' => 4,
+    '#size' => 4,
+    '#weight' => 5,
   );
 
   $form['submit'] = array(
