@@ -19,6 +19,9 @@ function commerce_saferpay_business_scd_handle_response($order) {
     drupal_goto(commerce_checkout_order_uri($order));
   }
 
+  // Store the CVC in the user session.
+  $_SESSION['commerce_saferpay_business_cvc'] = $_GET['CVC'];
+
   // Store the card ref id in the order object.
   // @todo Add commerce_cardonfile integration.
   $order->data['commerce_saferpay_card_ref_id'] = (string)$data['CARDREFID'];

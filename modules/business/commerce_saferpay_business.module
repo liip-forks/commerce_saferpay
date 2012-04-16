@@ -298,6 +298,12 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
     $data['MPI_SESSIONID'] = $order->data['commerce_saferpay_mpi_session_id'];
   }
 
+  // If the CVC number is present in the session, use it and then remove it.
+  if (!empty($_SESSION['commerce_saferpay_business_cvc'])) {
+    $data['CVC'] = $_SESSION['commerce_saferpay_business_cvc'];
+    unset($_SESSION['commerce_saferpay_business_cvc']);
+  }
+
   // Order data.
   $total = field_get_items('commerce_order', $order, 'commerce_order_total');
   $data['AMOUNT'] = $total[0]['amount'];
