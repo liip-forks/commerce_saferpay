@@ -70,7 +70,19 @@ function commerce_saferpay_business_mpi_handle_response($order) {
     drupal_set_message(t('Payment failed: @message', array('@message' => $data['MESSAGE'])));
     drupal_goto(commerce_checkout_order_uri($order));
   }
-  // Authorize and optionally settle the order.
-  $order->data['commerce_saferpay_mpi_session_id'] = (string)$data['MPI_SESSIONID'];
-  commerce_saferpay_business_pay_order($order);
+
+  // To prevent double execution, check if we already have a payment, also make
+  // sure we're not running into this twice.
+  if (!isset($order->data['commerce_saferpay_mpi_session_id']) && lock_acquire('commerce_saferpay_' . $order->order_id)) {
+    // Authorize and optionally settle the order.
+    $order->data['commerce_saferpay_mpi_session_id'] = (string)$data['MPI_SESSIONID'];
+    commerce_saferpay_business_pay_order($order);
+    commerce_order_save($order);
+  }
+  else {
+    // Redirect to the current order checkout page, without error. If this
+    // happened, then we already have a payment for this order and can ignore
+    // the request.
+    drupal_goto(commerce_checkout_order_uri($order));
+  }
 }
