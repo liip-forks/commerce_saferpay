@@ -135,7 +135,9 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
     'bank' => '',
   );
 
-  $form['#attached']['css'][] = array(drupal_get_path('module', 'commerce_payment') . '/theme/commerce_payment.theme.css');
+  // @todo instead of using drupal_add_css the following should be used:
+  // $form['#attached']['css'][] = array(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
+  drupal_add_css(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
 
   $form['CardHolder'] = array(
     '#type' => 'textfield',
