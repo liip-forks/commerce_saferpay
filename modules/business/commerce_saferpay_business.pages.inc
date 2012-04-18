@@ -78,6 +78,7 @@ function commerce_saferpay_business_mpi_handle_response($order) {
     $order->data['commerce_saferpay_mpi_session_id'] = (string)$data['MPI_SESSIONID'];
     commerce_saferpay_business_pay_order($order);
     commerce_order_save($order);
+    lock_release('commerce_saferpay_' . $order->order_id);
   }
   else {
     // Redirect to the current order checkout page, without error. If this
