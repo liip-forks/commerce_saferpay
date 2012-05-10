@@ -155,7 +155,7 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
     $settings = $payment_method['settings'];
     $settings += commerce_saferpay_default_settings();
     $finalize = array(
-      'ACCOUNTID' => $settings,
+      'ACCOUNTID' => $settings['account_id'],
       'ID' => $result_output['ID'],
       'TOKEN' => $result_output['TOKEN'],
     );
@@ -188,8 +188,6 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
  *   Array with the payment method setings.
  */
 function commerce_saferpay_pp_initpay($order, $settings) {
-  global $language;
-
   $order_identifier = token_replace($settings['order_identifier'], array('commerce-order' => $order));
   $order_description = token_replace($settings['order_description'], array('commerce-order' => $order));
 
@@ -197,7 +195,6 @@ function commerce_saferpay_pp_initpay($order, $settings) {
 
   $data = array();
 
-  $data['LANGID'] = $language->language;
   $data['AMOUNT'] = $total[0]['amount'];
   $data['CURRENCY'] = $total[0]['currency_code'];
   $data['DESCRIPTION'] = htmlentities($order_description);

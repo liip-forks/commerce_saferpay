@@ -93,6 +93,7 @@ function commerce_saferpay_default_settings() {
  *   URL to redirect the user to make payment.
  */
 function commerce_saferpay_initpay($order, $settings, array $data = array()) {
+  global $language;
 
   // Apply default settings.
   $settings += commerce_saferpay_default_settings();
@@ -103,8 +104,11 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
     $data['spPassword'] = $settings['password'];
   }
 
-  $url = url('https://www.saferpay.com/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
+  // Saferpay only supports en, de, it and fr. For everything else, fall back to
+  // en.
+  $data['LANGID'] = in_array($language->language, array('en', 'de', 'fr', 'it')) ? $language->language : 'EN';
 
+  $url = url('https://www.saferpay.com/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
   $return = commerce_saferpay_process_url($url);
   if (strpos($return, 'ERROR') !== FALSE) {
     drupal_set_message(t('An error occurred during payment: @error.', array('@error' => $return)), 'error');
