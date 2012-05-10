@@ -344,7 +344,9 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
   $total = field_get_items('commerce_order', $order, 'commerce_order_total');
   $data['AMOUNT'] = $total[0]['amount'];
   $data['CURRENCY'] = $total[0]['currency_code'];
-  $data['ORDERID'] = $order->order_number;
+
+  $order_identifier = token_replace($settings['order_identifier'], array('commerce-order' => $order));
+  $data['ORDERID']  = htmlentities($order_identifier);
 
   $url = url('https://www.saferpay.com/hosting/execute.asp', array('external' => TRUE, 'query' => $data));
 
