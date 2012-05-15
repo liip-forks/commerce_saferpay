@@ -52,7 +52,7 @@ function commerce_saferpay_business_scd_handle_response($order) {
       }
     }
     else {
-      drupal_set_message(t('Payment failed.'), 'error');
+      drupal_set_message(t('Payment failed: @error.', array('@error' => commerce_saferpay_business_error())), 'error');
       drupal_goto(commerce_checkout_order_uri($order));
     }
   }
