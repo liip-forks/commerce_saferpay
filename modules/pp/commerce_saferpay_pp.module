@@ -139,8 +139,8 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
 
   $transaction = commerce_saferpay_get_transaction($order, $result_output['ID'], $payment_method['method_id']);
   $transaction->remote_id = $result_output['ID'];
-  $transaction->amount = $tx_amount;
-  $transaction->currency_code = $tx_currency;
+  $transaction->amount = (string)$tx_amount;
+  $transaction->currency_code = (string)$tx_currency;
   $transaction->payload[REQUEST_TIME] = $data;
 
   $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
@@ -167,13 +167,11 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
     if (drupal_substr($result, 0, 2) == 'OK') {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
       $transaction->message = t('Successfully completed the payment.');
-      $transaction->remote_message = $result;
       commerce_payment_transaction_save($transaction);
     }
     else {
       $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
-      $transaction->message = t('Failed to complete payment.');
-      $transaction->remote_message = $result;
+      $transaction->message = t('Failed to complete payment: @error', array('@error' => $result));
       commerce_payment_transaction_save($transaction);
     }
   }
