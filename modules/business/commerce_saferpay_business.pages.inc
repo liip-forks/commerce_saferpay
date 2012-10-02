@@ -18,13 +18,20 @@ function commerce_saferpay_business_scd_handle_response($order) {
     drupal_set_message(t('Credit card verification failed: @error.', array('@error' => $data['DESCRIPTION'])), 'error');
     drupal_goto(commerce_checkout_order_uri($order));
   }
-
   // Store the CVC in the user session.
   $_SESSION['commerce_saferpay_business_cvc'] = $_GET['CVC'];
 
-  // Store the card ref id in the order object.
-  // @todo Add commerce_cardonfile integration.
+  if (isset($_GET['cardonfile_store'])) {
+    $order->data['cardonfile_store'] = $_GET['cardonfile_store'];
+  }
+
+  // Store the card information in order.
   $order->data['commerce_saferpay_card_ref_id'] = (string)$data['CARDREFID'];
+  $order->data['commerce_saferpay_card_holder'] = (string)$_GET['CardHolder'];
+  $order->data['commerce_saferpay_card_number'] = substr((string)$data['CARDMASK'], -4);
+  $order->data['commerce_saferpay_expiry_month'] = (string)$data['EXPIRYMONTH'];
+  $order->data['commerce_saferpay_expiry_year'] = '20' . (string)$data['EXPIRYYEAR'];
+
   commerce_order_save($order);
 
   $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);

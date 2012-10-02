@@ -59,6 +59,10 @@ function commerce_saferpay_business_commerce_payment_method_info() {
     'terminal' => FALSE,
     'offsite' => TRUE,
     'offsite_autoredirect' => FALSE,
+    'cardonfile' => array(
+      'delete callback' => 'commerce_saferpay_business_cardonfile_delete',
+      'add callback' => 'commerce_saferpay_business_cardonfile_add',
+    ),
   );
 
   return $payment_methods;
@@ -97,6 +101,49 @@ function commerce_saferpay_business_settings_form($settings = NULL) {
       ),
     ),
   );
+  return $form;
+}
+
+/**
+ * Payment method callback: checkout form submission.
+ *
+ * This saves the values from the Cardonfile fields into the order, so
+ * it can be reused later.
+ */
+function commerce_saferpay_business_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
+  if (module_exists('commerce_cardonfile')) {
+    // First save the values into the order object.
+    if (!empty($pane_values['credit_card']['cardonfile_store'])) {
+      $order->data['cardonfile_store'] = $pane_values['credit_card']['cardonfile_store'];
+    }
+    if (!empty($pane_values['cardonfile'])) {
+      $order->data['cardonfile'] = $pane_values['cardonfile'];
+    }
+    commerce_order_save($order);
+
+    // If the user has selected to use an existing card
+    if (!empty($order->data['cardonfile']) && $order->data['cardonfile'] !== 'new') {
+      $card_data = commerce_cardonfile_data_load($order->data['cardonfile']);
+      $order->data['commerce_saferpay_card_ref_id'] = $card_data['remote_id'];
+      commerce_order_save($order);
+      commerce_saferpay_business_pay_order($order);
+    }
+  }
+}
+
+/**
+ * Payment method callback; generation callback for the payment form.
+ */
+function commerce_saferpay_business_submit_form($payment_method, $pane_values, $checkout_pane, $order) {
+  $form = array();
+  // commerce_cardonfile module only accts if a credit_card container exists.
+  // Trick it into believing it does.
+  if (module_exists('commerce_cardonfile')) {
+    $form['credit_card'] = array(
+      '#type' => 'container',
+      '#access' => FALSE,
+    );
+  }
   return $form;
 }
 
@@ -196,6 +243,24 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
     '#size' => 4,
     '#weight' => 5,
   );
+
+  if (module_exists('commerce_cardonfile')) {
+    $storage = variable_get('commerce_cardonfile_storage', 'opt-in');
+    if (in_array($storage, array('opt-in', 'opt-out'))) {
+      $form['cardonfile_store'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Store this credit card on file for future use.'),
+        '#default_value' => $storage == 'opt-out',
+        '#weight' => 10,
+      );
+    }
+  }
+  else {
+    $form['cardonfile_store'] = array(
+      '#type' => 'value',
+      '#value' => TRUE,
+    );
+  }
 
   $form['submit'] = array(
     '#type' => 'submit',
@@ -330,6 +395,7 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
 
   $data['CARDREFID'] = $order->data['commerce_saferpay_card_ref_id'];
   // Set the MPI_SESSIONID if existing.
+
   if (!empty($order->data['commerce_saferpay_mpi_session_id'])) {
     $data['MPI_SESSIONID'] = $order->data['commerce_saferpay_mpi_session_id'];
   }
@@ -346,7 +412,7 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
   $data['CURRENCY'] = $total[0]['currency_code'];
 
   $order_identifier = token_replace($settings['order_identifier'], array('commerce-order' => $order));
-  $data['ORDERID']  = htmlentities($order_identifier);
+  $data['ORDERID'] = htmlentities($order_identifier);
 
   $url = url('https://www.saferpay.com/hosting/execute.asp', array('external' => TRUE, 'query' => $data));
 
@@ -451,6 +517,31 @@ function commerce_saferpay_business_pay_order($order) {
   if ($transaction !== FALSE) {
     $complete_response = commerce_saferpay_business_settle_payment($transaction, $payment_method['settings']);
     if ($complete_response === TRUE) {
+      $cardonfile_exists = module_exists('commerce_cardonfile');
+      if ($cardonfile_exists && !empty($order->data['cardonfile_store'])) {
+        $card_data = array(
+          'uid' => $order->uid,
+          'payment_method' => $payment_method['method_id'],
+          'instance_id' => $payment_method['instance_id'],
+          'remote_id' => $order->data['commerce_saferpay_card_ref_id'],
+          'card_type' => 'card',
+          'card_name' => $order->data['commerce_saferpay_card_holder'],
+          'card_number' => $order->data['commerce_saferpay_card_number'],
+          'card_exp_month' => $order->data['commerce_saferpay_expiry_month'],
+          'card_exp_year' => $order->data['commerce_saferpay_expiry_year'],
+          'status' => 1,
+        );
+        // Save new card on file.
+        commerce_cardonfile_data_save($card_data);
+      }
+
+      // If the user has selected to use an existing card we have to set the
+      // Order Status to payment manually because we skipped the payment
+      // redirect.
+      if ($cardonfile_exists && !empty($order->data['cardonfile']) && $order->data['cardonfile'] !== 'new') {
+        commerce_order_status_update($order, 'checkout_payment', FALSE, "Payment via Cardonfile");
+      }
+
       // Send the customer on to the next checkout page.
       commerce_payment_redirect_pane_next_page($order);
       drupal_goto(commerce_checkout_order_uri($order));
