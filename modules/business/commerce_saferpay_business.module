@@ -54,6 +54,7 @@ function commerce_saferpay_business_commerce_payment_method_info() {
   $payment_methods['commerce_saferpay_business'] = array(
     'method_id' => 'commerce_saferpay_business',
     'title' => t('Saferpay business'),
+    'display_title' => t('Credit card'),
     'description' => t('Handels payments (almost) without redirects to Saferpay. (Hidden Mode)'),
     'active' => TRUE,
     'terminal' => FALSE,
