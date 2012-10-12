@@ -245,7 +245,7 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
     '#weight' => 5,
   );
 
-  if (module_exists('commerce_cardonfile')) {
+  if (module_exists('commerce_cardonfile') && $GLOBALS['user']->uid > 0) {
     $storage = variable_get('commerce_cardonfile_storage', 'opt-in');
     if (in_array($storage, array('opt-in', 'opt-out'))) {
       $form['cardonfile_store'] = array(
