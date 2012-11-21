@@ -525,7 +525,7 @@ function commerce_saferpay_business_pay_order($order) {
           'payment_method' => $payment_method['method_id'],
           'instance_id' => $payment_method['instance_id'],
           'remote_id' => $order->data['commerce_saferpay_card_ref_id'],
-          'card_type' => 'card',
+          'card_type' => $order->data['commerce_saferpay_card_type'],
           'card_name' => $order->data['commerce_saferpay_card_holder'],
           'card_number' => $order->data['commerce_saferpay_card_number'],
           'card_exp_month' => $order->data['commerce_saferpay_expiry_month'],

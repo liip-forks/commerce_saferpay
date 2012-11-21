@@ -25,13 +25,23 @@ function commerce_saferpay_business_scd_handle_response($order) {
     $order->data['cardonfile_store'] = $_GET['cardonfile_store'];
   }
 
+  // Copied from from Saferpay SCD documentation.
+  $card_types = array(
+    21699 => 'Lastschrift',
+    19265 => 'American Express',
+    19269 => 'MasterCard',
+    19274 => 'J.C.B.',
+    19286 => 'Visa',
+    99072 => 'Saferpay Testkarte'
+  );
+
   // Store the card information in order.
   $order->data['commerce_saferpay_card_ref_id'] = (string)$data['CARDREFID'];
   $order->data['commerce_saferpay_card_holder'] = (string)$_GET['CardHolder'];
   $order->data['commerce_saferpay_card_number'] = substr((string)$data['CARDMASK'], -4);
   $order->data['commerce_saferpay_expiry_month'] = (string)$data['EXPIRYMONTH'];
   $order->data['commerce_saferpay_expiry_year'] = '20' . (string)$data['EXPIRYYEAR'];
-
+  $order->data['commerce_saferpay_card_type'] = $card_types[(string)$data['CARDTYPE']];
   commerce_order_save($order);
 
   $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);
