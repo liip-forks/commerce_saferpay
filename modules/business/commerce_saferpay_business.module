@@ -424,7 +424,7 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
 
     if ((int) $idp['RESULT'] == 0) {
       $transaction = commerce_saferpay_get_transaction($order, $idp['ID'], $method_id);
-      $transaction->remote_id = $idp['ID'];
+      $transaction->remote_id = (string)$idp['ID'];
       $transaction->amount = $data['AMOUNT'];
       $transaction->currency_code = $data['CURRENCY'];
       $transaction->payload[REQUEST_TIME][] = $idp_string;
