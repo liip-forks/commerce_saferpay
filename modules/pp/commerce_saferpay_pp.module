@@ -73,21 +73,30 @@ function commerce_saferpay_pp_settings_form($settings = NULL) {
  * Implements CALLBACK_commerce_payment_method_redirect_form().
  */
 function commerce_saferpay_pp_redirect_form($form, &$form_state, $order, $payment_method) {
+
+  // Merge defaults for case it has not been configured.
+  $payment_method['settings'] += commerce_saferpay_default_settings();
+
   if (empty($payment_method['settings']['account_id'])) {
     drupal_set_message(t('Saferpay has not been configured. The test account is used. Visit the <a href="!url">payment settings</a> to change this.', array('!url' => url('admin/commerce/config/payment-methods'))), 'warning');
   }
 
   $url = commerce_saferpay_pp_initpay($order, $payment_method['settings']);
-  if (empty($url)) {
-    return array();
-  }
-  $form['#action'] = $url;
 
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Proceed to Saferpay'),
-    '#weight' => 50,
-  );
+  if (empty($url)) {
+    drupal_set_message(t('Error processing the payment. Unable to connect to the Saferpay service.'), 'error');
+    drupal_goto('');
+  }
+  else {
+    $form['#action'] = $url;
+
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Proceed to Saferpay'),
+      '#weight' => 50,
+    );
+  }
+
 
   return $form;
 }
@@ -151,7 +160,7 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
 
   // @todo: Check if the PayComplete and PayCompletev2 (used by business) API's
   // can be unified. Specifically, check if PayCompletev2 can be used here.
-  if ($payment_method['settings']['autocomplete']) {
+  if (isset($payment_method['settings']['autocomplete']) && $payment_method['settings']['autocomplete']) {
     $settings = $payment_method['settings'];
     $settings += commerce_saferpay_default_settings();
     $finalize = array(
