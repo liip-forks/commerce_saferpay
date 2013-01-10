@@ -255,12 +255,12 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
         '#weight' => 10,
       );
     }
-  }
-  else {
-    $form['cardonfile_store'] = array(
-      '#type' => 'value',
-      '#value' => TRUE,
-    );
+    else {
+      $form['cardonfile_store'] = array(
+        '#type' => 'hidden',
+        '#value' => TRUE,
+      );
+    }
   }
 
   $form['submit'] = array(
@@ -519,7 +519,7 @@ function commerce_saferpay_business_pay_order($order) {
     $complete_response = commerce_saferpay_business_settle_payment($transaction, $payment_method['settings']);
     if ($complete_response === TRUE) {
       $cardonfile_exists = module_exists('commerce_cardonfile');
-      if ($cardonfile_exists && !empty($order->data['cardonfile_store'])) {
+      if ($cardonfile_exists && isset($order->data['cardonfile']) && $order->data['cardonfile'] == 'new') {
         $card_data = array(
           'uid' => $order->uid,
           'payment_method' => $payment_method['method_id'],

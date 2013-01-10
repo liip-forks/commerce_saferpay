@@ -21,8 +21,8 @@ function commerce_saferpay_business_scd_handle_response($order) {
   // Store the CVC in the user session.
   $_SESSION['commerce_saferpay_business_cvc'] = $_GET['CVC'];
 
-  if (isset($_GET['cardonfile_store'])) {
-    $order->data['cardonfile_store'] = $_GET['cardonfile_store'];
+  if (!empty($_GET['cardonfile_store'])) {
+    $order->data['cardonfile'] = 'new';
   }
 
   // Copied from from Saferpay SCD documentation.
