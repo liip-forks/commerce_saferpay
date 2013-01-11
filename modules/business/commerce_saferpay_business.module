@@ -63,6 +63,7 @@ function commerce_saferpay_business_commerce_payment_method_info() {
     'cardonfile' => array(
       'delete callback' => 'commerce_saferpay_business_cardonfile_delete',
       'add callback' => 'commerce_saferpay_business_cardonfile_add',
+      'charge callback' => 'commerce_saferpay_business_cardonfile_charge',
     ),
   );
 
@@ -557,4 +558,50 @@ function commerce_saferpay_business_pay_order($order) {
     drupal_set_message(t('An error occured while processing the payment: @error.', array('@error' => commerce_saferpay_business_error())), 'error');
     drupal_goto(commerce_checkout_order_uri($order));
   }
+}
+
+/**
+ * Commerce recurring payment charge callback.
+ *
+ * @param object $order
+ *   New order object for which we want to settle the payment.
+ * @param $parent_order
+ *   Parent order based on which the current one is created.
+ *
+ * @return bool
+ *   The transaction result.
+ */
+function commerce_saferpay_business_cardonfile_charge($order, $parent_order) {
+
+  if (!module_exists('commerce_cardonfile')) {
+    watchdog('commerce_saferpay_business', 'Attempt to enroll cardonfile payment without commerce_cardonfile module enabled.',
+      array(), WATCHDOG_ERROR);
+
+    return FALSE;
+  }
+
+  // Copy payment data from the parent order.
+  $order->data['payment_method'] = $parent_order->data['payment_method'];
+  $order->data['commerce_saferpay_card_ref_id'] = $parent_order->data['commerce_saferpay_card_ref_id'];
+
+  commerce_order_save($order);
+
+  $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);
+  $transaction = commerce_saferpay_business_authorize_payment($order, $payment_method['settings'], $payment_method['method_id']);
+  if ($transaction == FALSE) {
+    watchdog('commerce_saferpay_business', 'An error occurred while processing the payment: @error.',
+      array('@error' => commerce_saferpay_business_error()), WATCHDOG_ERROR, l($order->order_id, entity_uri('commerce_order', $order)));
+
+    return FALSE;
+  }
+
+  $complete_response = commerce_saferpay_business_settle_payment($transaction, $payment_method['settings']);
+  if ($complete_response == FALSE) {
+    watchdog('commerce_saferpay_business', 'An error occurred while settling the payment: @error.',
+      array('@error' => commerce_saferpay_business_error()), WATCHDOG_ERROR, l($order->order_id, entity_uri('commerce_order', $order)));
+
+    return FALSE;
+  }
+
+  return TRUE;
 }
