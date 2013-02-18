@@ -465,6 +465,12 @@ function commerce_saferpay_business_settle_payment($transaction, $settings) {
 
   $settings += commerce_saferpay_default_settings();
 
+  if (!isset($settings['autocomplete']) || !$settings['autocomplete']) {
+    // If autocomplete is disabled, don't settle the payment but still report
+    // it as a success.
+    return TRUE;
+  }
+
   // Generic arguments.
   $data['ACCOUNTID'] = $settings['account_id'];
   if (!empty($settings['password'])) {
