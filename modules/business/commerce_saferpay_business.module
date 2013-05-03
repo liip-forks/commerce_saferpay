@@ -186,7 +186,7 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
 
   // When the test account is used, add a default value for the test credit
   // card.
-  if ($payment_method['settings']['account_id'] == '99867-94913159') {
+  if (empty($payment_method['settings']['account_id']) || $payment_method['settings']['account_id'] == '99867-94913159') {
     $default['owner'] = t('Test card');
     $default['number'] = '9451123100000111';
   }
