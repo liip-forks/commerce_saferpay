@@ -184,6 +184,13 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
     'bank' => '',
   );
 
+  // When the test account is used, add a default value for the test credit
+  // card.
+  if ($payment_method['settings']['account_id'] == '99867-94913159') {
+    $default['owner'] = t('Test card');
+    $default['number'] = '9451123100000111';
+  }
+
   // @todo instead of using drupal_add_css the following should be used:
   // $form['#attached']['css'][] = array(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
   drupal_add_css(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
