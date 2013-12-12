@@ -84,6 +84,7 @@ function commerce_saferpay_business_settings_form($settings = NULL) {
   $settings += array(
     'require_liablityshift' => FALSE,
     'use_mpi' => TRUE,
+    'amount_on_payment_page' => FALSE,
   );
 
   $form['use_mpi'] = array(
@@ -102,6 +103,12 @@ function commerce_saferpay_business_settings_form($settings = NULL) {
         ':input[name="parameter[payment_method][settings][payment_method][settings][use_mpi]"]' => array('checked' => TRUE),
       ),
     ),
+  );
+  $form['amount_on_payment_page'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show the amount on the payment page'),
+    '#description' => t('If checked, the amount is shown on the payment page where the credit card data has to be entered.'),
+    '#default_value' => $settings['amount_on_payment_page'],
   );
   return $form;
 }
@@ -194,6 +201,18 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
   // @todo instead of using drupal_add_css the following should be used:
   // $form['#attached']['css'][] = array(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
   drupal_add_css(drupal_get_path('module', 'commerce_saferpay_business') . '/includes/commerce_saferpay_business.css');
+
+  // Show the amount if this is not disabled.
+  if (!empty($payment_method['settings']['amount_on_payment_page'])) {
+    $total = field_get_items('commerce_order', $order, 'commerce_order_total');
+
+    $form['amount_preview'] = array(
+      '#type' => 'item',
+      '#title' => t('Amount'),
+      '#markup' => '<span id="preview-amount" class="form-markup">' . commerce_currency_format($total[0]['amount'], $total[0]['currency_code']) . '</span>',
+      '#weight' => 0,
+    );
+  }
 
   $form['CardHolder'] = array(
     '#type' => 'textfield',
