@@ -54,6 +54,7 @@ function commerce_saferpay_pp_settings_form($settings = NULL) {
   $settings += array(
     'cvc' => TRUE,
     'ccname' => TRUE,
+    'notifyaddress' => '',
   );
 
   $form['cvc'] = array(
@@ -65,6 +66,11 @@ function commerce_saferpay_pp_settings_form($settings = NULL) {
     '#type' => 'checkbox',
     '#title' => t('Cardholder field active?'),
     '#default_value' => $settings['ccname'],
+  );
+  $form['notifyaddress'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Notification email address'),
+    '#default_value' => $settings['notifyaddress'],
   );
   return $form;
 }
@@ -210,6 +216,7 @@ function commerce_saferpay_pp_initpay($order, $settings) {
   $data['DELIVERY'] = 'no';
   $data['CCCVC'] = !empty($settings['cvc']) ? 'yes' : 'no';
   $data['CCNAME'] = !empty($settings['ccname']) ? 'yes' : 'no';
+  $data['NOTIFYADDRESS'] = !empty($settings['notifyaddress']) ? $settings['notifyaddress'] : '';
 
   $data['FAILLINK'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
   $data['SUCCESSLINK'] = url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
