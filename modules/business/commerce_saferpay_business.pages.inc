@@ -25,15 +25,7 @@ function commerce_saferpay_business_scd_handle_response($order) {
     $order->data['cardonfile'] = 'new';
   }
 
-  // Copied from from Saferpay SCD documentation.
-  $card_types = array(
-    21699 => 'Lastschrift',
-    19265 => 'American Express',
-    19269 => 'MasterCard',
-    19274 => 'J.C.B.',
-    19286 => 'Visa',
-    99072 => 'Saferpay Testkarte'
-  );
+  $card_types = commerce_saferpay_get_card_types();
 
   // Store the card information in order.
   $order->data['commerce_saferpay_card_ref_id'] = (string)$data['CARDREFID'];

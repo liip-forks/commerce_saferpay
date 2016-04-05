@@ -166,9 +166,9 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
 
   // @todo: Check if the PayComplete and PayCompletev2 (used by business) API's
   // can be unified. Specifically, check if PayCompletev2 can be used here.
+  $settings = $payment_method['settings'];
+  $settings += commerce_saferpay_default_settings();
   if (isset($payment_method['settings']['autocomplete']) && $payment_method['settings']['autocomplete']) {
-    $settings = $payment_method['settings'];
-    $settings += commerce_saferpay_default_settings();
     $finalize = array(
       'ACCOUNTID' => $settings['account_id'],
       'ID' => $result_output['ID'],
@@ -190,6 +190,40 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
       commerce_payment_transaction_save($transaction);
     }
   }
+
+  $cardonfile_exists = module_exists('commerce_cardonfile');
+  if ($cardonfile_exists && $settings['request_card_id']) {
+
+    $card_types = commerce_saferpay_get_card_types();
+
+    $card_data = array(
+      'uid' => $order->uid,
+      'payment_method' => $payment_method['method_id'],
+      'instance_id' => $payment_method['instance_id'],
+      'remote_id' => (string) $data_xml['CARDREFID'],
+      'card_type' => $card_types[(string) $data_xml['CARDTYPE']],
+      'card_name' => '',
+      'card_number' => substr((string) $data_xml['CARDMASK'], -4),
+      'card_exp_month' => (string) $data_xml['EXPIRYMONTH'],
+      'card_exp_year' => '20' . (string) $data_xml['EXPIRYYEAR'],
+      'status' => 1,
+    );
+    // Save new card on file.
+    commerce_cardonfile_data_save($card_data);
+
+    // Store the card information in order.
+    $order->data['cardonfile'] = $card_data['card_id'];
+    $order->data['commerce_saferpay_card_ref_id'] = (string)$data_xml['CARDREFID'];
+
+    $order->data['commerce_saferpay_card_number'] = substr((string)$data_xml['CARDMASK'], -4);
+    $order->data['commerce_saferpay_expiry_month'] = (string)$data_xml['EXPIRYMONTH'];
+    $order->data['commerce_saferpay_expiry_year'] = '20' . (string)$data_xml['EXPIRYYEAR'];
+    $order->data['commerce_saferpay_card_type'] = $card_types[(string)$data_xml['CARDTYPE']];
+    commerce_order_save($order);
+
+
+  }
+
 }
 
 /**

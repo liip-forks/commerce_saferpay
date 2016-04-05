@@ -58,6 +58,12 @@ function commerce_saferpay_settings_form($settings = NULL) {
     '#title' => t('Auto Finalize payment by capture of transaction.'),
     '#default_value' => $settings['autocomplete'],
   );
+  $form['request_card_id'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Request Card ID.'),
+    '#description' => t('Enable this to allow integration with the Commerce Card on File project. To be able to use this setting, Saferpay support must set this up for the configured account. Contact integration@saferpay.com.'),
+    '#default_value' => $settings['request_card_id'],
+  );
 
   return $form;
 }
@@ -74,7 +80,27 @@ function commerce_saferpay_default_settings() {
     'order_identifier' => '[commerce-order:order-id]-[commerce-order:created]',
     'autocomplete' => TRUE,
     'order_description' => 'Order [commerce-order:order-id] at [site:name]',
+    'request_card_id' => FALSE,
   );
+}
+
+/**
+ * Returns saferpay card types.
+ *
+ * @return array
+ *   List of card types, keyed by ID.
+ */
+function commerce_saferpay_get_card_types() {
+  // Copied from from Saferpay SCD documentation.
+  $card_types = array(
+    21699 => 'Lastschrift',
+    19265 => 'American Express',
+    19269 => 'MasterCard',
+    19274 => 'J.C.B.',
+    19286 => 'Visa',
+    99072 => 'Saferpay Testkarte'
+  );
+  return $card_types;
 }
 
 /**
@@ -102,6 +128,10 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
 
   if (!empty($settings['password'])) {
     $data['spPassword'] = $settings['password'];
+  }
+
+  if (!empty($settings['request_card_id'])) {
+    $data['CARDREFID'] = 'new';
   }
 
   // Saferpay only supports en, de, it and fr. For everything else, fall back to

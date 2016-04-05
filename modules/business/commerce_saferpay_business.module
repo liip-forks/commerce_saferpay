@@ -313,11 +313,6 @@ function commerce_saferpay_business_redirect_form($form, &$form_state, $order, $
 function _commerce_saferpay_business_initpay($order, $settings) {
   $data = array();
 
-  // @todo: Check this:
-  // * Für die Verwendung von CARDREFID="new" muss bei Saferpay zunächst ein numerischer Startwert für den
-  // Account hinterlegt werden. Kontaktieren Sie hierfür integration@saferpay.com.
-  $data['CARDREFID'] = 'new';
-
   $data['FAILLINK'] = url('commerce/saferpay/scd/' . $order->order_id . '/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
   $data['SUCCESSLINK'] = $data['FAILLINK'];
   $data['BACKLINK'] = $data['FAILLINK'];
