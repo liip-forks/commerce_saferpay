@@ -17,20 +17,28 @@
  */
 function commerce_saferpay_settings_form($settings = NULL) {
 
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($settings);
 
   $form['account_id'] = array(
     '#type' => 'textfield',
     '#title' => t('Account ID'),
+    '#description' => t('You can derive the AccountID as follows: CUSTOMERID-TERMINALID, i.e. 401860-17795278 (See https://www.six-payment-services.com/en/site/saferpay-support/testaccount/general_test_account.html)'),
     '#default_value' => $settings['account_id'],
   );
 
   $form['password'] = array(
     '#type' => 'textfield',
     '#title' => t('spPassword'),
-    '#description' => t('Only required for the test account.'),
+    '#description' => t('This is only kept for backwards compatibility and is not needed anymore.'),
     '#default_value' => $settings['password'],
   );
+  $form['domain'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Domain'),
+    '#description' => t('The saferpay domain to use, use https://test.saferpay.com for a test account, https://www.saferpay.com for production..'),
+    '#default_value' => $settings['domain'],
+  );
+
   $form['order_identifier'] = array(
     '#type' => 'textfield',
     '#title' => t('Order identifier'),
@@ -75,13 +83,38 @@ function commerce_saferpay_settings_form($settings = NULL) {
  */
 function commerce_saferpay_default_settings() {
   return array(
-    'account_id' => '99867-94913159',
-    'password' => 'XAjc3Kna',
+    'account_id' => '401860-17795278',
+    'password' => '',
     'order_identifier' => '[commerce-order:order-id]-[commerce-order:created]',
     'autocomplete' => TRUE,
     'order_description' => 'Order [commerce-order:order-id] at [site:name]',
     'request_card_id' => FALSE,
+    'domain' => 'https://www.saferpay.com',
   );
+}
+
+/**
+ * Applies default settings.
+ *
+ * Ensures that the test domain is used for the test account.
+ *
+ * @param array $settings
+ *   The configured settings.
+ *
+ * @return array
+ *   The settings with defaults applied.
+ */
+function commerce_saferpay_apply_default_settings($settings) {
+  // Apply default settings.
+  $settings += commerce_saferpay_default_settings();
+
+  // If the account_id is the test, use the test domain. This is not set
+  // in default settings for existing sites that do not have a domain set.
+  if ($settings['account_id'] == '401860-17795278') {
+    $settings['domain'] = 'https://test.saferpay.com';
+  }
+
+  return $settings;
 }
 
 /**
@@ -122,7 +155,7 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
   global $language;
 
   // Apply default settings.
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($settings);
 
   $data['ACCOUNTID'] = $settings['account_id'];
 
@@ -138,7 +171,7 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
   // en.
   $data['LANGID'] = in_array($language->language, array('en', 'de', 'fr', 'it')) ? $language->language : 'EN';
 
-  $url = url('https://www.saferpay.com/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
+  $url = url($settings['domain'] . '/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
   $return = commerce_saferpay_process_url($url);
   if (strpos($return, 'ERROR') !== FALSE) {
     drupal_set_message(t('An error occurred during payment: @error.', array('@error' => $return)), 'error');
@@ -172,20 +205,21 @@ function commerce_saferpay_process_url($sUrl) {
  *
  * @param $data
  *   Data string to be verified.
- *
  * @param $signature
  *   The signature given by Saferpay for the data.
+ * @param array $settings
+ *   The payment method settings.
  *
  * @return
  *   TRUE if the data is valid, FALSE otherwise. The actual response in case of
  *   valid data can be received through commerce_saferpay_confirm_result().
  */
-function commerce_saferpay_confirm_validate($data, $signature) {
+function commerce_saferpay_confirm_validate($data, $signature, $settings) {
   $verify = array(
     'DATA' => $data,
     'SIGNATURE' => $signature,
   );
-  $url = url('https://www.saferpay.com/hosting/VerifyPayConfirm.asp', array('external' => TRUE, 'query' => $verify));
+  $url = url($settings['domain'] . '/hosting/VerifyPayConfirm.asp', array('external' => TRUE, 'query' => $verify));
   $result = commerce_saferpay_process_url($url);
 
   if (drupal_substr($result, 0, 3) != 'OK:') {

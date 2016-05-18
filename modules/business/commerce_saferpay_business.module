@@ -40,7 +40,9 @@ function commerce_saferpay_business_menu() {
  */
 function commerce_saferpay_business_redirect_access($order, $key) {
   if (user_access('access checkout') && !empty($_GET['DATA']) && $key == $order->data['payment_redirect_key']) {
-    return commerce_saferpay_confirm_validate($_GET['DATA'], $_GET['SIGNATURE']);
+    $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);
+    $settings = commerce_saferpay_apply_default_settings($payment_method['settings']);
+    return commerce_saferpay_confirm_validate($_GET['DATA'], $_GET['SIGNATURE'], $settings);
   }
 }
 
@@ -356,7 +358,7 @@ function commerce_saferpay_business_error($new_error = NULL) {
 function commerce_saferpay_business_verify_enrollment($order, $scd_response, $settings) {
   $data = array();
 
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($settings);
 
   // Generic arguments.
   $data['MSGTYPE'] = 'VerifyEnrollment';
@@ -375,7 +377,7 @@ function commerce_saferpay_business_verify_enrollment($order, $scd_response, $se
   $data['AMOUNT'] = $total[0]['amount'];
   $data['CURRENCY'] = $total[0]['currency_code'];
 
-  $url = url('https://www.saferpay.com/hosting/VerifyEnrollment.asp', array('external' => TRUE, 'query' => $data));
+  $url = url($settings['domain'] . '/hosting/VerifyEnrollment.asp', array('external' => TRUE, 'query' => $data));
 
   $return = commerce_saferpay_process_url($url);
   list($code, $response) = explode(':', $return, 2);
@@ -407,7 +409,7 @@ function commerce_saferpay_business_verify_enrollment($order, $scd_response, $se
 function commerce_saferpay_business_authorize_payment($order, $settings, $method_id) {
   $data = array();
 
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($settings);
 
   // Generic arguments.
   $data['MSGTYPE'] = 'VerifyEnrollment';
@@ -437,7 +439,7 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
   $order_identifier = token_replace($settings['order_identifier'], array('commerce-order' => $order));
   $data['ORDERID'] = htmlentities($order_identifier, ENT_QUOTES, "UTF-8");
 
-  $url = url('https://www.saferpay.com/hosting/execute.asp', array('external' => TRUE, 'query' => $data));
+  $url = url($settings['domain'] . '/hosting/execute.asp', array('external' => TRUE, 'query' => $data));
 
   $return = commerce_saferpay_process_url($url);
   list($code, $idp_string) = explode(':', $return, 2);
@@ -484,7 +486,7 @@ function commerce_saferpay_business_authorize_payment($order, $settings, $method
 function commerce_saferpay_business_settle_payment($transaction, $settings) {
   $data = array();
 
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($settings);
 
   if (!isset($settings['autocomplete']) || !$settings['autocomplete']) {
     // If autocomplete is disabled, don't settle the payment but still report
@@ -501,7 +503,7 @@ function commerce_saferpay_business_settle_payment($transaction, $settings) {
 
   $data['ID'] = $transaction->remote_id;
 
-  $url = url('https://www.saferpay.com/hosting/paycompletev2.asp', array('external' => TRUE, 'query' => $data));
+  $url = url($settings['domain'] . '/hosting/paycompletev2.asp', array('external' => TRUE, 'query' => $data));
 
   $return = commerce_saferpay_process_url($url);
   list($code, $response_string) = explode(':', $return, 2);

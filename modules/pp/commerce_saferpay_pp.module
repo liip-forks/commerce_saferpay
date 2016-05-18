@@ -81,7 +81,7 @@ function commerce_saferpay_pp_settings_form($settings = NULL) {
 function commerce_saferpay_pp_redirect_form($form, &$form_state, $order, $payment_method) {
 
   // Merge defaults for case it has not been configured.
-  $payment_method['settings'] += commerce_saferpay_default_settings();
+  $payment_method['settings'] = commerce_saferpay_apply_default_settings($payment_method['settings']);
 
   if (empty($payment_method['settings']['account_id'])) {
     drupal_set_message(t('Saferpay has not been configured. The test account is used. Visit the <a href="!url">payment settings</a> to change this.', array('!url' => url('admin/commerce/config/payment-methods'))), 'warning');
@@ -118,7 +118,8 @@ function commerce_saferpay_pp_redirect_form_validate($order, $payment_method) {
   $data = $_GET['DATA'];
   $signature = $_GET['SIGNATURE'];
 
-  return commerce_saferpay_confirm_validate($data, $signature);
+  $settings = commerce_saferpay_apply_default_settings($payment_method['settings']);
+  return commerce_saferpay_confirm_validate($data, $signature, $settings);
 }
 
 /**
@@ -128,6 +129,7 @@ function commerce_saferpay_pp_redirect_form_submit($order, $payment_method) {
   if (empty($_GET['DATA'])) {
     return;
   }
+
   commerce_saferpay_pp_process_data($order, $payment_method, $_GET['DATA']);
 }
 
@@ -166,8 +168,7 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
 
   // @todo: Check if the PayComplete and PayCompletev2 (used by business) API's
   // can be unified. Specifically, check if PayCompletev2 can be used here.
-  $settings = $payment_method['settings'];
-  $settings += commerce_saferpay_default_settings();
+  $settings = commerce_saferpay_apply_default_settings($payment_method['settings']);
   if (isset($payment_method['settings']['autocomplete']) && $payment_method['settings']['autocomplete']) {
     $finalize = array(
       'ACCOUNTID' => $settings['account_id'],
@@ -177,7 +178,7 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
     if (!empty($settings['password'])) {
       $finalize['spPassword'] = $settings['password'];
     }
-    $url = url('https://www.saferpay.com/hosting/PayComplete.asp', array('external' => TRUE, 'query' => $finalize));
+    $url = url($settings['domain'] . '/hosting/PayComplete.asp', array('external' => TRUE, 'query' => $finalize));
     $result = commerce_saferpay_process_url($url);
     if (drupal_substr($result, 0, 2) == 'OK') {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
