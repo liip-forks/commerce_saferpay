@@ -255,7 +255,7 @@ function commerce_saferpay_pp_initpay($order, $settings) {
 
   $data['FAILLINK'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
   $data['SUCCESSLINK'] = url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
-  $data['BACKLINK'] = url('cart', array('absolute' => TRUE));
+  $data['BACKLINK'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
 
   return commerce_saferpay_initpay($order, $settings, $data);
 }
