@@ -39,6 +39,34 @@ function commerce_saferpay_settings_form($settings = NULL) {
     '#default_value' => $settings['domain'],
   );
 
+  $form['payment_methods'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Enabled payment methods'),
+    '#options' => array(
+      1 => t('MasterCard'),
+      2 => t('Visa'),
+      3 => t('American Express'),
+      4 => t('Diners Club'),
+      5 => t('JCB'),
+      6 => t('Saferpay Testkarte'),
+      8 => t('Bonus Card'),
+      9 => t('PostFinance E-Finance'),
+      10 => t('PostFinance Card'),
+      11 => t('Maestro International'),
+      12 => t('MyOne'),
+      13 => t('Direct debit (ELV)'),
+      14 => t('Invoice'),
+      15 => t('Sofortüberweisung'),
+      16 => t('PayPal'),
+      17 => t('giropay'),
+      18 => t('iDEAL'),
+      20 => t('Homebanking AT (eps)'),
+      22 => t('ePrzelewy'),
+    ),
+    '#default_value' => $settings['payment_methods'],
+    '#description' => t('Use this parameter to restrict the payment means selectable in the Payment Page. Without any selection all active payment means of the terminal are shown.'),
+  );
+
   $form['order_identifier'] = array(
     '#type' => 'textfield',
     '#title' => t('Order identifier'),
@@ -163,13 +191,17 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
     $data['spPassword'] = $settings['password'];
   }
 
+  $payment_methods = array_filter($settings['payment_methods']);
+  if (!empty($payment_methods)) {
+    $data['PAYMENTMETHODS'] = join(',', $payment_methods);
+  }
+
   if (!empty($settings['request_card_id'])) {
     $data['CARDREFID'] = 'new';
   }
 
-  // Saferpay only supports en, de, it and fr. For everything else, fall back to
-  // en.
-  $data['LANGID'] = in_array($language->language, array('en', 'de', 'fr', 'it')) ? $language->language : 'EN';
+  // For languages that are not supported by Saferpay fall back to en.
+  $data['LANGID'] = in_array($language->language, array('de', 'en', 'fr', 'da', 'cs', 'es', 'hr', 'it', 'hu', 'nl', 'no', 'pl', 'pt', 'ru', 'ro', 'sk', 'sl', 'fi', 'sv', 'tr', 'el', 'ja', 'zh')) ? $language->language : 'EN';
 
   $url = url($settings['domain'] . '/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
   $return = commerce_saferpay_process_url($url);
