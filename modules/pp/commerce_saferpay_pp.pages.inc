@@ -5,9 +5,10 @@
  * Saferpay menu items callbacks.
  */
 
-function commerce_saferpay_ipn($payment_method, $order) {
-  // @todo: This code is not yet tested.
-
+/**
+ * Page callback for saferpay notify URL callback.
+ */
+function commerce_saferpay_pp_notify($payment_method_instance, $order) {
   $data = $_POST['DATA'];
   $signature = $_POST['SIGNATURE'];
 
@@ -15,12 +16,13 @@ function commerce_saferpay_ipn($payment_method, $order) {
     $data = stripslashes($data);
   }
 
-  $data_xml = simplexml_load_string($data);
-
-  if (!_commerce_saferpay_confirm_validate($data, $signature)) {
-    return FALSE;
+  if (!commerce_saferpay_confirm_validate($data, $signature, $payment_method_instance['settings'])) {
+    drupal_access_denied();
+    return;
   }
 
-  $result = commerce_saferpay_confirm_result();
-  commerce_saferpay_process_data($order, $payment_method, $data_xml, $result);
+  if (commerce_saferpay_pp_process_data($order, $payment_method_instance, $data)) {
+    commerce_payment_redirect_pane_next_page($order, t('Triggered by Saferpay notify'));
+  }
 }
+

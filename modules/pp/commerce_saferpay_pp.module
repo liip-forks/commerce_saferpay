@@ -12,11 +12,11 @@
  */
 function commerce_saferpay_pp_menu() {
   // Callback functions for cip payment.
-  $items['commerce_saferpay/ipn/%commerce_payment_method_instance/%commerce_order'] = array(
+  $items['commerce_saferpay/notify/%commerce_payment_method_instance/%commerce_order'] = array(
     'title' => 'Saferpay payment notification',
-    'page callback' => 'commerce_saferpay_ipn',
-    'page arguments' => array(2),
-    'access arguments' => array('access content'),
+    'page callback' => 'commerce_saferpay_pp_notify',
+    'page arguments' => array(2, 3),
+    'access callback' => TRUE,
     'type' => MENU_CALLBACK,
     'file' => 'commerce_saferpay_pp.pages.inc',
   );
@@ -87,7 +87,7 @@ function commerce_saferpay_pp_redirect_form($form, &$form_state, $order, $paymen
     drupal_set_message(t('Saferpay has not been configured. The test account is used. Visit the <a href="!url">payment settings</a> to change this.', array('!url' => url('admin/commerce/config/payment-methods'))), 'warning');
   }
 
-  $url = commerce_saferpay_pp_initpay($order, $payment_method['settings']);
+  $url = commerce_saferpay_pp_initpay($order, $payment_method);
 
   if (empty($url)) {
     drupal_set_message(t('Error processing the payment. Unable to connect to the Saferpay service.'), 'error');
@@ -142,11 +142,15 @@ function commerce_saferpay_pp_redirect_form_submit($order, $payment_method) {
  *   The payment method array.
  * @param $data
  *   The IDP XML data returned by Saferpay as a string.
+ *
+ * @return bool
+ *   TRUE if transaction was processed and added, FALSE in case of an error
+ *   or if the transaction was already processed.
  */
 function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
   $data_xml = simplexml_load_string($data);
   if (!is_object($data_xml)) {
-    return;
+    return FALSE;
   }
   $tx_amount = $data_xml['AMOUNT'];
   $tx_currency = $data_xml['CURRENCY'];
@@ -155,6 +159,12 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
   parse_str(drupal_substr($result, 3), $result_output);
 
   $transaction = commerce_saferpay_get_transaction($order, $result_output['ID'], $payment_method['method_id']);
+
+  // Do not process the same transaction twice.
+  if (!$transaction->is_new) {
+    return FALSE;
+  }
+
   $transaction->remote_id = $result_output['ID'];
   $transaction->amount = (string)$tx_amount;
   $transaction->currency_code = (string)$tx_currency;
@@ -221,10 +231,9 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
     $order->data['commerce_saferpay_expiry_year'] = '20' . (string)$data_xml['EXPIRYYEAR'];
     $order->data['commerce_saferpay_card_type'] = $card_types[(string)$data_xml['CARDTYPE']];
     commerce_order_save($order);
-
-
   }
 
+  return TRUE;
 }
 
 /**
@@ -235,7 +244,10 @@ function commerce_saferpay_pp_process_data($order, $payment_method, $data) {
  * @param $settings
  *   Array with the payment method setings.
  */
-function commerce_saferpay_pp_initpay($order, $settings) {
+function commerce_saferpay_pp_initpay($order, $payment_method) {
+
+  $settings = $payment_method['settings'];
+
   $order_identifier = token_replace($settings['order_identifier'], array('commerce-order' => $order));
   $order_description = token_replace($settings['order_description'], array('commerce-order' => $order));
 
@@ -256,6 +268,7 @@ function commerce_saferpay_pp_initpay($order, $settings) {
   $data['FAILLINK'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
   $data['SUCCESSLINK'] = url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
   $data['BACKLINK'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
+  $data['NOTIFYURL'] = url('commerce_saferpay/notify/' . $payment_method['instance_id'] . '/' . $order->order_id, array('absolute' => TRUE));
 
   return commerce_saferpay_initpay($order, $settings, $data);
 }
