@@ -206,7 +206,7 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
   $url = url($settings['domain'] . '/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
   $return = commerce_saferpay_process_url($url);
   if (strpos($return, 'ERROR') !== FALSE) {
-    drupal_set_message(t('An error occurred during payment: @error.', array('@error' => $return)), 'error');
+    drupal_set_message(t('An error occurred during payment: @error.', array('@error' => utf8_encode($return))), 'error');
     return FALSE;
   }
   return $return;
