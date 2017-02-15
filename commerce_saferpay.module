@@ -224,7 +224,9 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
 function commerce_saferpay_process_url($sUrl) {
   $ch = curl_init($sUrl);
   curl_setopt($ch, CURLOPT_PORT, 443);
-  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+  if (!variable_get('commerce_saferpay_ssl_verifypeer', TRUE)) {
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+  }
   curl_setopt($ch, CURLOPT_HEADER, 0);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
   $sReturn = curl_exec($ch);
