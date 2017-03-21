@@ -142,6 +142,9 @@ function commerce_saferpay_apply_default_settings($settings) {
     $settings['domain'] = 'https://test.saferpay.com';
   }
 
+  // Allow to override settings with variables.
+  $settings = variable_get('commerce_saferpay_settings_overrides', array()) + $settings;
+
   return $settings;
 }
 
