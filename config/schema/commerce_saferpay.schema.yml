@@ -1,0 +1,24 @@
+commerce_payment.commerce_payment_gateway.plugin.saferpay_paymentpage:
+  type: commerce_payment_gateway_configuration
+  mapping:
+    customer_id:
+      type: string
+      label: 'Terminal id'
+    terminal_id:
+      type: string
+      label: 'Terminal id'
+    username:
+      type: string
+      label: 'Saferpay basic auth username'
+    password:
+      type: string
+      label: 'Saferpay basic auth passowrd'
+    order_identifier:
+      type: string
+      label: 'The order identification'
+    order_description:
+      type: string
+      label: 'The order description'
+    autocomplete:
+      type: boolean
+      label: 'Whether or not to capture the transaction automatically'

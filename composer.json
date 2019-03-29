@@ -1,0 +1,9 @@
+{
+    "name": "phm/commerce_saferpay",
+    "description": "Saferpay integration for Drupal Commerce.",
+    "type": "drupal-module",
+    "license": "GPL-2.0+",
+    "require": {
+        "drupal/commerce": "^2.11"
+    }
+}

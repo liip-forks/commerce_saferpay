@@ -1,5 +1,0 @@
-name = Commerce Saferpay
-description = Saferpay Payment Gateway for Drupal Commerce
-dependencies[] = commerce_payment
-package = Commerce (contrib)
-core = 7.x
