@@ -118,6 +118,7 @@ function commerce_saferpay_default_settings() {
     'order_description' => 'Order [commerce-order:order-id] at [site:name]',
     'request_card_id' => FALSE,
     'domain' => 'https://www.saferpay.com',
+    'payment_methods' => array(),
   );
 }
 
