@@ -6,37 +6,60 @@
  */
 
 /**
+ * The supported api version.
+ */
+const SAFERPAY_API_VERSION = '1.12';
+
+/**
+ * Saferpay captured status.
+ */
+const SAFERPAY_CAPTURED = 'CAPTURED';
+
+/**
+ * Saferpay authorised status.
+ */
+const SAFERPAY_AUTHORIZED = 'AUTHORIZED';
+
+/**
  * Common settings form elements.
  *
- * @param $settings
+ * @param array $settings
  *   An array of the current settings.
+ * @param bool $jsonapi
+ *   If jsonapi settings should be used.
+ *
  * @return
  *   A form snippet.
  *
  * @see CALLBACK_commerce_payment_method_settings_form()
  */
-function commerce_saferpay_settings_form($settings = NULL) {
+function commerce_saferpay_settings_form($settings = NULL, $jsonapi = FALSE) {
 
-  $settings = commerce_saferpay_apply_default_settings($settings);
+  $settings = commerce_saferpay_apply_default_settings($settings, $jsonapi);
 
-  $form['account_id'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Account ID'),
-    '#description' => t('You can derive the AccountID as follows: CUSTOMERID-TERMINALID, i.e. 401860-17795278 (See https://www.six-payment-services.com/en/site/saferpay-support/testaccount/general_test_account.html)'),
-    '#default_value' => $settings['account_id'],
-  );
+  if (!$jsonapi) {
+    $form['account_id'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Account ID'),
+      '#description' => t('You can derive the AccountID as follows: CUSTOMERID-TERMINALID, i.e. 401860-17795278 (See https://www.six-payment-services.com/en/site/saferpay-support/testaccount/general_test_account.html)'),
+      '#default_value' => $settings['account_id'],
+      '#weight' => 0,
+    );
 
-  $form['password'] = array(
-    '#type' => 'textfield',
-    '#title' => t('spPassword'),
-    '#description' => t('This is only kept for backwards compatibility and is not needed anymore.'),
-    '#default_value' => $settings['password'],
-  );
+    $form['password'] = array(
+      '#type' => 'textfield',
+      '#title' => t('spPassword'),
+      '#description' => t('This is only kept for backwards compatibility and is not needed anymore.'),
+      '#default_value' => $settings['password'],
+      '#weight' => 5,
+    );
+  }
   $form['domain'] = array(
     '#type' => 'textfield',
     '#title' => t('Domain'),
     '#description' => t('The saferpay domain to use, use https://test.saferpay.com for a test account, https://www.saferpay.com for production..'),
     '#default_value' => $settings['domain'],
+    '#weight' => 10,
   );
 
   $form['payment_methods'] = array(
@@ -65,6 +88,7 @@ function commerce_saferpay_settings_form($settings = NULL) {
     ),
     '#default_value' => $settings['payment_methods'],
     '#description' => t('Use this parameter to restrict the payment means selectable in the Payment Page. Without any selection all active payment means of the terminal are shown.'),
+    '#weight' => 15,
   );
 
   $form['order_identifier'] = array(
@@ -72,33 +96,32 @@ function commerce_saferpay_settings_form($settings = NULL) {
     '#title' => t('Order identifier'),
     '#description' => t('The order identifier sent to Saferpay Gateway - check Replacement patterns'),
     '#default_value' => $settings['order_identifier'],
+    '#weight' => 20,
   );
   $form['order_description'] = array(
     '#type' => 'textfield',
     '#title' => t('Order description'),
     '#description' => t('The order description displayed on the payment page -  check Replacement patterns'),
     '#default_value' => $settings['order_description'],
+    '#weight' => 25,
   );
-  $form['view']['token_help'] = array(
-    '#title' => t('Replacement patterns'),
-    '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-  );
-  $form['view']['token_help']['help'] = array(
-    '#theme' => 'token_tree',
+  $form['view'] = array(
+    '#weight' => 24,
+    '#theme' => 'token_tree_link',
     '#token_types' => array('commerce-order'),
-  );
+);
   $form['autocomplete'] = array(
     '#type' => 'checkbox',
     '#title' => t('Auto Finalize payment by capture of transaction.'),
     '#default_value' => $settings['autocomplete'],
+    '#weight' => 30,
   );
   $form['request_card_id'] = array(
     '#type' => 'checkbox',
     '#title' => t('Request Card ID.'),
     '#description' => t('Enable this to allow integration with the Commerce Card on File project. To be able to use this setting, Saferpay support must set this up for the configured account. Contact integration@saferpay.com.'),
     '#default_value' => $settings['request_card_id'],
+    '#weight' => 35,
   );
 
   return $form;
@@ -108,18 +131,36 @@ function commerce_saferpay_settings_form($settings = NULL) {
  * Returns the default settings for both payment methods.
  *
  * Defaults to the test account id and password.
+ *
+ * @param bool $jsonapi
+ *   If jsonapi settings should be used.
+ *
+ * @return array
+ *   The default settings
  */
-function commerce_saferpay_default_settings() {
-  return array(
+function commerce_saferpay_default_settings($jsonapi = FALSE) {
+  $settings = array(
     'account_id' => '401860-17795278',
     'password' => '',
-    'order_identifier' => '[commerce-order:order-id]-[commerce-order:created]',
+    'order_identifier' => '[commerce-order:order-id]',
     'autocomplete' => TRUE,
     'order_description' => 'Order [commerce-order:order-id] at [site:name]',
     'request_card_id' => FALSE,
     'domain' => 'https://www.saferpay.com',
     'payment_methods' => array(),
   );
+  if ($jsonapi) {
+    $settings += array(
+      'customer_id' => '401860',
+      'terminal_id' => '17795278',
+      'domain' => 'https://www.saferpay.com/api',
+      'basic_auth_user' => '',
+      'basic_auth_password' => '',
+      'debug' => FALSE,
+    );
+  }
+
+  return $settings;
 }
 
 /**
@@ -129,18 +170,27 @@ function commerce_saferpay_default_settings() {
  *
  * @param array $settings
  *   The configured settings.
+ * @param bool $jsonapi
+ *   If jsonapi settings should be used.
  *
  * @return array
  *   The settings with defaults applied.
  */
-function commerce_saferpay_apply_default_settings($settings) {
+function commerce_saferpay_apply_default_settings($settings, $jsonapi = FALSE) {
   // Apply default settings.
-  $settings += commerce_saferpay_default_settings();
+  $settings += commerce_saferpay_default_settings($jsonapi);
 
   // If the account_id is the test, use the test domain. This is not set
   // in default settings for existing sites that do not have a domain set.
-  if ($settings['account_id'] == '401860-17795278') {
-    $settings['domain'] = 'https://test.saferpay.com';
+  if (!$jsonapi) {
+    if ($settings['account_id'] == '401860-17795278') {
+      $settings['domain'] = 'https://test.saferpay.com';
+    }
+  }
+  else {
+    if ($settings['customer_id'] == '401860') {
+      $settings['domain'] = 'https://test.saferpay.com/api';
+    }
   }
 
   // Allow to override settings with variables.
@@ -205,7 +255,7 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
   }
 
   // For languages that are not supported by Saferpay fall back to en.
-  $data['LANGID'] = in_array($language->language, array('de', 'en', 'fr', 'da', 'cs', 'es', 'hr', 'it', 'hu', 'nl', 'no', 'pl', 'pt', 'ru', 'ro', 'sk', 'sl', 'fi', 'sv', 'tr', 'el', 'ja', 'zh')) ? $language->language : 'EN';
+  $data['LANGID'] = in_array($language->language, commerce_saferpay_langcodes()) ? $language->language : 'EN';
 
   $url = url($settings['domain'] . '/hosting/CreatePayInit.asp', array('external' => TRUE, 'query' => $data));
   $return = commerce_saferpay_process_url($url);
@@ -214,6 +264,39 @@ function commerce_saferpay_initpay($order, $settings, array $data = array()) {
     return FALSE;
   }
   return $return;
+}
+
+/**
+ * Returns a list of language codes supported by Saferpay.
+ *
+ * @return string[]
+ */
+function commerce_saferpay_langcodes() {
+  return [
+    'de',
+    'en',
+    'fr',
+    'da',
+    'cs',
+    'es',
+    'hr',
+    'it',
+    'hu',
+    'nl',
+    'no',
+    'pl',
+    'pt',
+    'ru',
+    'ro',
+    'sk',
+    'sl',
+    'fi',
+    'sv',
+    'tr',
+    'el',
+    'ja',
+    'zh'
+  ];
 }
 
 /**
@@ -311,4 +394,363 @@ function commerce_saferpay_get_transaction($order, $id, $method_id)  {
     $transaction = commerce_payment_transaction_new($method_id, $order->order_id);
   }
   return $transaction;
+}
+
+// SAFERPAY PP JSON API PAYMENT METHOD.
+
+/**
+ * Implements hook_menu().
+ */
+function commerce_saferpay_menu() {
+  $items['commerce_saferpay_json/notify/%commerce_payment_method_instance/%commerce_order'] = [
+    'title' => 'Saferpay payment notification',
+    'page callback' => 'commerce_saferpay_json_pp_notify',
+    'page arguments' => [2, 3],
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'commerce_saferpay.json_pp_pages.inc',
+  ];
+
+  return $items;
+}
+
+/**
+ * Implements hook_commerce_payment_method_info().
+ */
+function commerce_saferpay_commerce_payment_method_info() {
+  $payment_methods = [];
+
+  $payment_methods['commerce_saferpay_json_pp'] = [
+    'method_id' => 'commerce_saferpay_json_pp',
+    'title' => t('Saferpay JSON Payment Page'),
+    'description' => t('Redirect users to submit payments through Saferpay.'),
+    'active' => TRUE,
+    'terminal' => FALSE,
+    'offsite' => TRUE,
+    'offsite_autoredirect' => 5,
+  ];
+
+  return $payment_methods;
+}
+
+/**
+ * Implements CALLBACK_commerce_payment_method_settings_form().
+ */
+function commerce_saferpay_json_pp_settings_form($settings = NULL) {
+  $form = commerce_saferpay_settings_form($settings, TRUE);
+  $settings = commerce_saferpay_apply_default_settings($settings, TRUE);
+
+  // Override default options.
+  $form['order_identifier']['#description'] = t('The order identifier sent to Saferpay Gateway - check Replacement patterns. Note: even if the documentation does not mention that, calls will fail if non alphanumeric characters are used.');
+  $form['domain']['#description'] = t('The saferpay domain to use, use https://test.saferpay.com/api for a test account, https://www.saferpay.com/api for production.');
+
+  $form['customer_id'] = [
+    '#type' => 'textfield',
+    '#title' => t('Customer ID'),
+    '#default_value' => $settings['customer_id'],
+    '#weight' => 5,
+  ];
+
+  $form['terminal_id'] = [
+    '#type' => 'textfield',
+    '#title' => t('Terminal ID'),
+    '#default_value' => $settings['terminal_id'],
+    '#weight' => 6,
+  ];
+
+  $form['basic_auth_user'] = [
+    '#type' => 'textfield',
+    '#title' => t('Basic auth username'),
+    '#description' => t('The username for the basic authentication (Settings > JSON API basic authentication).'),
+    '#default_value' => $settings['basic_auth_user'],
+    '#weight' => 7,
+  ];
+
+  $form['basic_auth_password'] = [
+    '#type' => 'textfield',
+    '#title' => t('Basic auth password'),
+    '#description' => t('The password for the basic authentication (Settings > JSON API basic authentication).'),
+    '#default_value' => $settings['basic_auth_password'],
+    '#weight' => 8,
+  ];
+  $form['debug'] = [
+    '#type' => 'checkbox',
+    '#title' => t('Debug mode'),
+    '#decription' => t('Output a more verbose log'),
+    '#default_value' => $settings['debug'],
+    '#weight' => 31,
+  ];
+
+  return $form;
+}
+
+/**
+ * Implements CALLBACK_commerce_payment_method_redirect_form().
+ */
+function commerce_saferpay_json_pp_redirect_form($form, &$form_state, $order, $payment_method) {
+
+  // Merge defaults for case it has not been configured.
+  $payment_method['settings'] = commerce_saferpay_apply_default_settings($payment_method['settings'], TRUE);
+
+  if (empty($payment_method['settings']['customer_id'])) {
+    drupal_set_message(t('Saferpay has not been configured. The test account is used. Visit the <a href="!url">payment settings</a> to change this.', ['!url' => url('admin/commerce/config/payment-methods')]), 'warning');
+  }
+
+  $url = commerce_saferpay_json_pp_initpay($order, $payment_method);
+
+  if (!$url) {
+    drupal_set_message(t('Error processing the payment. Unable to connect to the Saferpay service.'), 'error');
+    drupal_goto('');
+  }
+  else {
+    $form['#action'] = $url;
+
+    $form['submit'] = [
+      '#type' => 'submit',
+      '#value' => t('Proceed to Saferpay'),
+      '#weight' => 50,
+    ];
+  }
+
+  return $form;
+}
+
+/**
+ * Implements CALLBACK_commerce_payment_method_redirect_form_validate().
+ */
+function commerce_saferpay_json_pp_redirect_form_validate($order, $payment_method) {
+  if (!empty($payment_method['settings']['debug'])) {
+    watchdog('commerce_saferpay', 'Customer returned from Saferpay.', array(), WATCHDOG_DEBUG);
+  }
+}
+
+/**
+ * Implements CALLBACK_commerce_payment_method_redirect_form_submit().
+ */
+function commerce_saferpay_json_pp_redirect_form_submit($order, $payment_method) {
+  return;
+}
+
+/**
+ * PaymentPage Initialize api call.
+ *
+ * @param $order
+ *   The order object.
+ * @param array $payment_method
+ *   Array with the payment method configuration.
+ *
+ * @return string|bool
+ *   The string with the redirect url or false.
+ */
+function commerce_saferpay_json_pp_initpay($order, $payment_method) {
+  global $language;
+
+  $settings = $payment_method['settings'];
+
+  $order_identifier = token_replace($settings['order_identifier'], ['commerce-order' => $order]);
+  $order_description = token_replace($settings['order_description'], ['commerce-order' => $order]);
+
+  $amounts = field_get_items('commerce_order', $order, 'commerce_order_total');
+  $amount = array_shift($amounts);
+
+  $data = [
+    'TerminalId' => $settings['terminal_id'],
+    'Payment' => [
+      'Amount' => [
+        'Value' => $amount['amount'],
+        'CurrencyCode' => $amount['currency_code'],
+      ],
+      'OrderId' => $order_identifier,
+      'Description' => $order_description,
+    ],
+    'Notification' => [
+      'NotifyUrl' => url('commerce_saferpay_json/notify/' . $payment_method['instance_id'] . '/' . $order->order_id, ['absolute' => TRUE]),
+    ],
+    'ReturnUrls' => [
+      'Success' => url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], ['absolute' => TRUE]),
+      'Fail' => url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], ['absolute' => TRUE]),
+      'Abort' => url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], ['absolute' => TRUE]),
+    ],
+  ];
+
+  if (!empty($settings['payment_methods'])) {
+    $enabled_payment_methods = array_filter($settings['payment_methods']);
+    foreach ($enabled_payment_methods as $card_id => $card_enabled) {
+      $data['PaymentMethods'][] = _commerce_saferpay_get_json_card_type_id($card_id);
+    }
+  }
+  if (!empty($settings['request_card_id'])) {
+    $data['RegisterAlias']['IdGenerator'] = 'RANDOM';
+  }
+
+  if (in_array($language->language, commerce_saferpay_langcodes())) {
+    $data['Payer']['LanguageCode'] = $language->language;
+  }
+
+  $saferpay_response = commerce_saferpay_json_do_request('/Payment/v1/PaymentPage/Initialize', $order->order_id, $settings, $data);
+
+  if (!isset($saferpay_response['RedirectUrl'])) {
+    return FALSE;
+  }
+
+  $order->data['saferpay_token'] = $saferpay_response['Token'];
+  commerce_order_save($order);
+
+  return $saferpay_response['RedirectUrl'];
+}
+
+/**
+ * PaymentPage Assert api call.
+ *
+ * @param \stdClass $order
+ *   The order object.
+ * @param array $payment_method
+ *   The used payment method.
+ *
+ * @return array
+ *   The result of the call.
+ */
+function commerce_saferpay_json_pp_assert($order, $payment_method) {
+  $order_data = $order->data;
+  $saferpay_response = commerce_saferpay_json_do_request('/Payment/v1/PaymentPage/Assert', $order->order_id, $payment_method['settings'], ['Token' => $order_data['saferpay_token']]);
+
+  if ($payment_method['settings']['debug']) {
+    watchdog('commerce_saferpay_json_pp', 'PaymentPage assert call finished. Order: %order_id. Status: %status. Transaction id: %transaction_id. Data %data', [
+      '%order_id' => $order->order_id,
+      '%status' => $saferpay_response['Transaction']['Status'],
+      '%transaction_id' => $saferpay_response['Transaction']['Id'],
+      '%data' => json_encode($saferpay_response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+    ]);
+  }
+
+  return $saferpay_response;
+}
+
+/**
+ * PaymentPage Capture api call.
+ *
+ * @param \stdClass $order
+ *   The order object.
+ * @param array $payment_method
+ *   The used payment method.
+ *
+ * @return array
+ *   The result of the call.
+ */
+function commerce_saferpay_json_pp_capture($order, $payment_method) {
+  $order_data = $order->data;
+  $data = [
+    'TransactionReference' => [
+      'TransactionId' => $order_data['saferpay_transaction_id'],
+    ],
+  ];
+
+  $saferpay_response = commerce_saferpay_json_do_request('/Payment/v1/Transaction/Capture', $order->order_id, $payment_method['settings'], $data);
+
+  if ($payment_method['settings']['debug']) {
+    watchdog('commerce_saferpay_json_pp', 'Transaction capture call finished. Order: %order_id. Status: %status.', [
+      '%order_id' => $order->order_id,
+      '%status' => $saferpay_response['Status'],
+    ]);
+  }
+
+  return $saferpay_response;
+}
+
+
+/**
+ * Does a post request using defaults parameters.
+ *
+ * @param string $url
+ *   The url for the request. Ie: /Payment/v1/Transaction/Capture.
+ * @param string $request_id
+ *   The unique identifier for this set of transactions.
+ * @param $settings
+ *   The payment method settings.
+ * @param array $data
+ *   The payload data.
+ *
+ * @return array|bool
+ *   The response data.
+ */
+function commerce_saferpay_json_do_request($url, $request_id, $settings, array $data = []) {
+  $headers = [
+    'Content-Type' => 'application/json; charset=utf-8',
+    'Accept' => 'application/json',
+    'Authorization' => 'Basic ' . base64_encode($settings['basic_auth_user'] . ':' . $settings['basic_auth_password']),
+  ];
+
+  $data['RequestHeader'] = [
+    'SpecVersion' => SAFERPAY_API_VERSION,
+    'CustomerId' => $settings['customer_id'],
+    'RequestId' => $request_id,
+    'RetryIndicator' => 0,
+  ];
+
+  $response = drupal_http_request($settings['domain'] . $url, [
+    'headers' => $headers,
+    'method' => 'POST',
+    'data' => json_encode($data),
+  ]);
+
+  if (!empty($response->data)) {
+    $return_data = json_decode($response->data, TRUE);
+  }
+
+  if (isset($response->error)) {
+
+    $variables = ['%error' => $response->error];
+    if (!$return_data) {
+      // No return data, log with minimal available info.
+      watchdog('commerce_saferpay', 'Error: %error.', $variables, WATCHDOG_ERROR);
+    }
+    else {
+      // @see https://saferpay.github.io/jsonapi/#errorhandling
+      $variables['%error_name'] = $return_data['ErrorName'];
+      $variables['%error_behavior'] = $return_data['Behavior'];
+      $variables['%error_message'] = $return_data['ErrorMessage'];
+      $variables['%details'] = isset($return_data['ErrorDetail'][0]) ? $return_data['ErrorDetail'][0] : '';
+
+      // Log more information.
+      watchdog('commerce_saferpay', 'Error: %error, Error name: %error_name, Behavior: %error_behavior, Message: %error_message, Details: %details.', $variables, WATCHDOG_ERROR);
+    }
+    return FALSE;
+  }
+
+  return $return_data;
+}
+
+/**
+ * Get the json api card code from legacy id.
+ *
+ * @param $id
+ *   The legacy id.
+ *
+ * @return string
+ *   The card type id or empty string.
+ */
+function _commerce_saferpay_get_json_card_type_id($id) {
+  $types = array(
+    1 => 'MASTERCARD',
+    2 => 'VISA',
+    3 => 'AMEX',
+    4 => 'DINERS',
+    5 => 'JCB',
+    6 => 'SAFERPAYTEST',
+    8 => 'BONUS',
+    9 => 'POSTFINANCE',
+    10 => 'POSTCARD',
+    11 => 'MAESTRO',
+    12 => 'MYONE',
+    13 => 'DIRECTDEBIT',
+    14 => 'INVOICE',
+    15 => 'SOFORT',
+    16 => 'PAYPAL',
+    17 => 'GIROPAY',
+    18 => 'IDEAL',
+    20 => 'EPS',
+    22 => 'EPRZELEWY',
+  );
+
+  return isset($types[$id]) ? $types[$id] : '';
 }
