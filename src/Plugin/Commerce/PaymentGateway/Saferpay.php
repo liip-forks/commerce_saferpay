@@ -6,7 +6,6 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
-use Drupal\commerce_price\Entity\Currency;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Lock\LockBackendInterface;
@@ -96,6 +95,13 @@ class Saferpay extends OffsitePaymentGatewayBase {
   protected $lock;
 
   /**
+   * The language manager.
+   *
+   * @var \Drupal\Core\Language\LanguageManagerInterface
+   */
+  protected $languageManager;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -106,6 +112,7 @@ class Saferpay extends OffsitePaymentGatewayBase {
       ->setHttpClient($container->get('http_client'))
       ->setToken($container->get('token'))
       ->setLock($container->get('lock'));
+    $saferpay->languageManager = $container->get('language_manager');
     return $saferpay;
   }
 
@@ -122,6 +129,8 @@ class Saferpay extends OffsitePaymentGatewayBase {
       'order_description' => '',
       'autocomplete' => TRUE,
       'debug' => FALSE,
+      'request_alias' => FALSE,
+      'payment_methods' => [],
     ] + parent::defaultConfiguration();
   }
 
@@ -167,6 +176,14 @@ class Saferpay extends OffsitePaymentGatewayBase {
       '#required' => empty($this->configuration['password']),
     ];
 
+    $form['payment_methods'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Allowed payment methods'),
+      '#description' => $this->t('Selecting none means all methods are allowed.'),
+      '#default_value' => $this->configuration['payment_methods'],
+      '#options' => $this->getSaferpayPaymentMethods(),
+    ];
+
     $form['order_identifier'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Order identifier'),
@@ -187,6 +204,13 @@ class Saferpay extends OffsitePaymentGatewayBase {
       '#type' => 'checkbox',
       '#title' => $this->t('Auto Finalize payment by capture of transaction.'),
       '#default_value' => $this->configuration['autocomplete'],
+    );
+
+    $form['request_alias'] = array(
+      '#type' => 'checkbox',
+      '#title' => $this->t('Request alias'),
+      '#description' => $this->t('To be able to use this setting, Saferpay support must set this up for the configured account. <strong>Note</strong>: This will request an alias and make it available to third party code, but it will not create reusable payments yet.'),
+      '#default_value' => $this->configuration['request_alias'],
     );
 
     $form['debug'] = array(
@@ -234,6 +258,8 @@ class Saferpay extends OffsitePaymentGatewayBase {
     $this->configuration['order_description'] = $values['order_description'];
     $this->configuration['autocomplete'] = $values['autocomplete'];
     $this->configuration['debug'] = $values['debug'];
+    $this->configuration['request_alias'] = $values['request_alias'];
+    $this->configuration['payment_methods'] = array_filter($values['payment_methods']);
   }
 
   /**
@@ -306,7 +332,7 @@ class Saferpay extends OffsitePaymentGatewayBase {
     // Exit if the payment has been processed.
     // @todo Should we deal with partial payments?
     if (count($payments) > 0) {
-      $this->logger->notice('Ignoring attempt to pay the already payed order %order_id.', [
+      $this->logger->notice('Ignoring attempt to pay the already paid order %order_id.', [
         '%order_id' => $order->id(),
       ]);
       return FALSE;
@@ -354,7 +380,12 @@ class Saferpay extends OffsitePaymentGatewayBase {
     }
 
     $payment = $payment_storage->create($payment_values);
+    \Drupal::moduleHandler()->invokeAll('commerce_saferpay_assert_result', [$assert_result, $order, $payment]);
+
     $payment->save();
+
+    // @todo Create payment method when supported.
+    //   https://www.drupal.org/project/commerce/issues/2838380.
 
     return $payment;
   }
@@ -395,6 +426,19 @@ class Saferpay extends OffsitePaymentGatewayBase {
       ],
     ];
     $data['ReturnUrls'] = $return_urls;
+
+    if (!empty($this->configuration['request_alias'])) {
+      $data['RegisterAlias']['IdGenerator'] = 'RANDOM';
+    }
+
+    $langcode = \Drupal::languageManager()->getCurrentLanguage()->getId();
+    if (in_array($langcode, $this->getSaferpayLanguages())) {
+      $data['Payer']['LanguageCode'] = $langcode;
+    }
+
+    if ($this->configuration['payment_methods']) {
+      $data['PaymentMethods'] = array_values($this->configuration['payment_methods']);
+    }
 
     $saferpay_response = $this->doRequest('/Payment/v1/PaymentPage/Initialize', $order->uuid(), $data);
 
@@ -583,6 +627,75 @@ class Saferpay extends OffsitePaymentGatewayBase {
   public function setLock(LockBackendInterface $lock) {
     $this->lock = $lock;
     return $this;
+  }
+
+  /**
+   * Returns a list of language codes supported by Saferpay.
+   *
+   * @return string[]
+   */
+  protected function getSaferpayLanguages() {
+    return [
+      'de',
+      'en',
+      'fr',
+      'da',
+      'cs',
+      'es',
+      'hr',
+      'it',
+      'hu',
+      'nl',
+      'no',
+      'pl',
+      'pt',
+      'ru',
+      'ro',
+      'sk',
+      'sl',
+      'fi',
+      'sv',
+      'tr',
+      'el',
+      'ja',
+      'zh',
+    ];
+  }
+
+  /**
+   * Returns the saferpay payment types.
+   *
+   * @return string[]
+   *   Payment method descriptions keyed by identifier.
+   */
+  protected function getSaferpayPaymentMethods() {
+    return [
+      'ALIPAY' => $this->t('Alipay'),
+      'AMEX' => $this->t('American Express'),
+      'BANCONTACT' => $this->t('Bancontact'),
+      'BONUS' => $this->t('Bonus Card'),
+      'DINERS' => $this->t('Diners Club'),
+      'DIRECTDEBIT' => $this->t('BillPay Direct Debit'),
+      'EPRZELEWY' => $this->t('ePrzelewy'),
+      'EPS' => $this->t('eps'),
+      'GIROPAY' => $this->t('giropay'),
+      'IDEAL' => $this->t('iDEAL'),
+      'INVOICE' => $this->t('Invoice'),
+      'JCB' => $this->t('JCB'),
+      'MAESTRO' => $this->t('Maestro Int.'),
+      'MASTERCARD' => $this->t('Mastercard'),
+      'MYONE' => $this->t('MyOne'),
+      'PAYPAL' => $this->t('PayPal'),
+      'PAYDIREKT' => $this->t('paydirekt'),
+      'POSTCARD' => $this->t('Postfinance Card'),
+      'POSTFINANCE' => $this->t('Postfinance eFinance'),
+      'SAFERPAYTEST' => $this->t('Saferpay Test'),
+      'SOFORT' => $this->t('SOFORT'),
+      'TWINT' => $this->t('TWINT'),
+      'UNIONPAY' => $this->t('Unionpay'),
+      'VISA' => $this->t('VISA'),
+      'VPAY' => $this->t('VPay'),
+    ];
   }
 
 }
