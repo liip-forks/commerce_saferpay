@@ -759,7 +759,7 @@ function _commerce_saferpay_get_json_card_type_id($id) {
  * Page callback for saferpay notify URL callback.
  */
 function commerce_saferpay_json_pp_notify($payment_method, $order) {
-  commerce_saferpay_json_pp_process($order, $payment_method);
+  commerce_saferpay_json_pp_process($payment_method, $order);
 }
 
 /**
