@@ -245,9 +245,7 @@ class Saferpay extends OffsitePaymentGatewayBase {
     $this->configuration['terminal_id'] = $values['terminal_id'];
 
     $this->configuration['username'] = $values['basic_auth']['username'];
-    // @todo Not sure if this is the correct way to handle this. I assume we
-    // don't want to display/store a plain text password.
-    if (!empty($values['basic_auth']['password']) && empty($previous_pass)) {
+    if (!empty($values['basic_auth']['password'])) {
       $this->configuration['password'] = $values['basic_auth']['password'];
     }
     else {
