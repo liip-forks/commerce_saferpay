@@ -172,8 +172,9 @@ class Saferpay extends OffsitePaymentGatewayBase {
     $form['basic_auth']['password'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Password'),
-      '#description' => $this->t('The password for the basic authentication (Settings > JSON API basic authentication). If you have already set it, leave it empty to keep using the stored password.'),
-      '#required' => empty($this->configuration['password']),
+      '#description' => $this->t('The password for the basic authentication (Settings > JSON API basic authentication).'),
+      '#default_value' => $this->configuration['password'],
+      '#required' => TRUE,
     ];
 
     $form['payment_methods'] = [
@@ -235,9 +236,6 @@ class Saferpay extends OffsitePaymentGatewayBase {
    * {@inheritdoc}
    */
   public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
-    // The parent unsets all config, so we need to fetch the configured
-    // password.
-    $previous_pass = !empty($this->configuration['password']) ? $this->configuration['password'] : '';
     parent::submitConfigurationForm($form, $form_state);
     $values = $form_state->getValue($form['#parents']);
 
@@ -245,12 +243,7 @@ class Saferpay extends OffsitePaymentGatewayBase {
     $this->configuration['terminal_id'] = $values['terminal_id'];
 
     $this->configuration['username'] = $values['basic_auth']['username'];
-    if (!empty($values['basic_auth']['password'])) {
-      $this->configuration['password'] = $values['basic_auth']['password'];
-    }
-    else {
-      $this->configuration['password'] = $previous_pass;
-    }
+    $this->configuration['password'] = $values['basic_auth']['password'];
 
     $this->configuration['order_identifier'] = $values['order_identifier'];
     $this->configuration['order_description'] = $values['order_description'];
