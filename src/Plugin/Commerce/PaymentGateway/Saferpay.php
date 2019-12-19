@@ -397,7 +397,7 @@ class Saferpay extends OffsitePaymentGatewayBase {
   public function paymentPageInitialize(PaymentInterface $payment, array $return_urls) {
     $order = $payment->getOrder();
     $currency_code = $payment->getAmount()->getCurrencyCode();
-    $amount = $this->toMinorUnits($order->getSubtotalPrice());
+    $amount = $this->toMinorUnits($order->getTotalPrice());
 
     $data = [
       'TerminalId' => $this->configuration['terminal_id'],
