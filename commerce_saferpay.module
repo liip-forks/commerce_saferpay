@@ -611,7 +611,7 @@ function commerce_saferpay_json_pp_initpay($order, $payment_method) {
  */
 function commerce_saferpay_json_pp_assert($order, $payment_method) {
   $order_data = $order->data;
-  $saferpay_response = commerce_saferpay_json_do_request('/Payment/v1/PaymentPage/Assert', $order->order_id, $payment_method['settings'], ['Token' => $order_data['saferpay_token']]);
+  $saferpay_response = commerce_saferpay_json_do_request('/Payment/v1/PaymentPage/Assert', $order->order_id, commerce_saferpay_apply_default_settings($payment_method['settings']), ['Token' => $order_data['saferpay_token']]);
 
   if ($payment_method['settings']['debug']) {
     watchdog('commerce_saferpay_json_pp', 'PaymentPage assert call finished. Order: %order_id. Status: %status. Transaction id: %transaction_id. Data %data', [
