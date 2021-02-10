@@ -36,7 +36,7 @@ use Symfony\Component\HttpFoundation\Response;
  *   payment_method_types = {"credit_card"},
  * )
  */
-class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsRefundsInterface  {
+class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsRefundsInterface {
 
   /**
    * The supported api version.
@@ -132,6 +132,7 @@ class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizatio
       'order_identifier' => '',
       'order_description' => '',
       'autocomplete' => TRUE,
+      'auto_capture_refunds' => TRUE,
       'debug' => FALSE,
       'request_alias' => FALSE,
       'payment_methods' => [],
@@ -205,24 +206,32 @@ class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizatio
       '#required' => TRUE,
     ];
 
-    $form['autocomplete'] = array(
+    $form['autocomplete'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Auto Finalize payment by capture of transaction.'),
       '#default_value' => $this->configuration['autocomplete'],
-    );
+    ];
 
-    $form['request_alias'] = array(
+    $form['auto_capture_refunds'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Auto Assert refunds.'),
+      '#default_value' => $this->configuration['auto_capture_refunds'],
+    ];
+
+    $form['request_alias'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Request alias'),
-      '#description' => $this->t('To be able to use this setting, Saferpay support must set this up for the configured account. <strong>Note</strong>: This will request an alias and make it available to third party code, but it will not create reusable payments yet.'),
+      '#description' => $this->t(
+        'To be able to use this setting, Saferpay support must set this up for the configured account. <strong>Note</strong>: This will request an alias and make it available to third party code, but it will not create reusable payments yet.'
+      ),
       '#default_value' => $this->configuration['request_alias'],
-    );
+    ];
 
-    $form['debug'] = array(
+    $form['debug'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Output more verbose debug log.'),
       '#default_value' => $this->configuration['debug'],
-    );
+    ];
 
     if ($this->moduleHandler->moduleExists('token')) {
       $form['token_help'] = [
@@ -252,6 +261,7 @@ class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizatio
     $this->configuration['order_identifier'] = $values['order_identifier'];
     $this->configuration['order_description'] = $values['order_description'];
     $this->configuration['autocomplete'] = $values['autocomplete'];
+    $this->configuration['auto_capture_refunds'] = $values['auto_capture_refunds'];
     $this->configuration['debug'] = $values['debug'];
     $this->configuration['request_alias'] = $values['request_alias'];
     $this->configuration['payment_methods'] = array_filter($values['payment_methods']);
@@ -632,6 +642,20 @@ class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizatio
     ];
 
     $saferpay_response = $this->doRequest('/Payment/v1/Transaction/Refund', $order->uuid(), $data);
+
+    // Auto capture refund.
+    if ($this->configuration['auto_capture_refunds']) {
+      $transaction_id = !empty($saferpay_response->Transaction->Id) ? $saferpay_response->Transaction->Id : '';
+      if ($transaction_id) {
+        $data = [
+          'TransactionReference' => [
+            'TransactionId' => $transaction_id,
+          ],
+        ];
+        $request_id = $order->uuid() . '_' . $transaction_id;
+        $saferpay_response = $this->doRequest('/Payment/v1/Transaction/Capture', $request_id, $data);
+      }
+    }
 
     if ($this->configuration['debug']) {
       $this->logger->info(
