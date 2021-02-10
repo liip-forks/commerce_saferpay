@@ -6,6 +6,10 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
+use Drupal\commerce_price\Entity\Currency;
+use Drupal\commerce_price\Price;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Lock\LockBackendInterface;
@@ -32,7 +36,7 @@ use Symfony\Component\HttpFoundation\Response;
  *   payment_method_types = {"credit_card"},
  * )
  */
-class Saferpay extends OffsitePaymentGatewayBase {
+class Saferpay extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsRefundsInterface  {
 
   /**
    * The supported api version.
@@ -299,6 +303,69 @@ class Saferpay extends OffsitePaymentGatewayBase {
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
+    $this->assertPaymentState($payment, ['authorization']);
+    $order = $payment->getOrder();
+
+    if ($payment->getRemoteId() && $capture_result = $this->transactionCapture($payment)) {
+
+      if ($capture_result->Status != static::SAFERPAY_CAPTURED) {
+        $this->logger->notice(
+          'Payment capture for order %order_id failed. Saferpay status was %status.',
+          [
+            '%order_id' => $order->id(),
+            '%status' => $capture_result->Status,
+          ]
+        );
+        return;
+      }
+
+      $payment->setState('completed');
+      $payment->setRemoteState($capture_result->Status);
+      $payment->setAmount($amount);
+      $payment->save();
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function voidPayment(PaymentInterface $payment) {
+    $this->assertPaymentState($payment, ['authorization']);
+
+    if ($payment->getRemoteId() && $this->transactionCancel($payment)) {
+      $payment->setState('canceled');
+      $payment->save();
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    $this->assertRefundAmount($payment, $amount);
+
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->state = 'partially_refunded';
+    }
+    else {
+      $payment->state = 'refunded';
+    }
+    $payment->setRefundedAmount($new_refunded_amount);
+
+    if ($payment->getRemoteId() && $this->transactionRefund($payment, $amount)) {
+      $payment->save();
+    }
+  }
+
+  /**
    * Payment processing.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -332,11 +399,6 @@ class Saferpay extends OffsitePaymentGatewayBase {
     // First assert and get the token.
     $assert_result = $this->paymentPageAssert($order);
 
-    // @todo Log/store more stuff?
-    $order_data = $order->getData('commerce_saferpay');
-    $order_data['transaction_id'] = $assert_result->Transaction->Id;
-    $order->setData('commerce_saferpay', $order_data)->save();
-
     // If authorized, capture.
     if ($assert_result->Transaction->Status != static::SAFERPAY_AUTHORIZED) {
       $this->logger->notice('Payment asserting for order %order_id failed. Saferpay status was %status. Saferpay transaction id was %transaction_id.', [
@@ -357,23 +419,25 @@ class Saferpay extends OffsitePaymentGatewayBase {
       'authorized' => $this->time->getRequestTime(),
     ];
 
+    /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+    $payment = $payment_storage->create($payment_values);
+    \Drupal::moduleHandler()->invokeAll('commerce_saferpay_assert_result', [$assert_result, $order, $payment]);
+
+    $payment->save();
+
     if ($this->configuration['autocomplete']) {
-      $capture_result = $this->transactionCapture($order);
+      $capture_result = $this->transactionCapture($payment);
       if ($capture_result->Status != static::SAFERPAY_CAPTURED) {
         $this->logger->notice('Payment capture for order %order_id failed. Saferpay status was %status.', [
           '%order_id' => $order->id(),
           '%status' => $capture_result->Status,
         ]);
-        return FALSE;
+        return $payment;
       }
-      $payment_values['remote_state'] = $capture_result->Status;
-      $payment_values['state'] = 'completed';
+      $payment->setRemoteState($capture_result->Status);
+      $payment->setState('completed');
+      $payment->save();
     }
-
-    $payment = $payment_storage->create($payment_values);
-    \Drupal::moduleHandler()->invokeAll('commerce_saferpay_assert_result', [$assert_result, $order, $payment]);
-
-    $payment->save();
 
     // @todo Create payment method when supported.
     //   https://www.drupal.org/project/commerce/issues/2838380.
@@ -478,11 +542,11 @@ class Saferpay extends OffsitePaymentGatewayBase {
    * @return \stdClass
    *   The result of the call.
    */
-  public function transactionCapture(OrderInterface $order) {
-    $order_data = $order->getData('commerce_saferpay');
+  public function transactionCapture(PaymentInterface $payment) {
+    $order = $payment->getOrder();
     $data = [
       'TransactionReference' => [
-        'TransactionId' => $order_data['transaction_id'],
+        'TransactionId' => $payment->getRemoteId(),
       ],
     ];
 
@@ -498,6 +562,91 @@ class Saferpay extends OffsitePaymentGatewayBase {
 
     return $saferpay_response;
   }
+
+  /**
+   * Transaction cancel call.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object.
+   *
+   * @return \stdClass
+   *   The result of the call.
+   */
+  public function transactionCancel(PaymentInterface $payment) {
+    $order = $payment->getOrder();
+    $data = [
+      'TransactionReference' => [
+        'TransactionId' => $payment->getRemoteId(),
+      ],
+    ];
+
+    $saferpay_response = $this->doRequest('/Payment/v1/Transaction/Cancel', $order->uuid(), $data);
+
+    if ($this->configuration['debug']) {
+      $this->logger->info(
+        'Transaction cancel call finished. Request id (order uuid): %request_id. Order: %order_id. Status: %status.',
+        [
+          '%request_id' => $order->uuid(),
+          '%order_id' => $order->id(),
+          '%status' => $saferpay_response->Status,
+        ]
+      );
+    }
+
+    return $saferpay_response;
+  }
+
+  /**
+   * Transaction refund call.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object.
+   *
+   * @return \stdClass
+   *   The result of the call.
+   */
+  public function transactionRefund(PaymentInterface $payment, Price $amount) {
+    $order = $payment->getOrder();
+
+    $currency_code = $amount->getCurrencyCode();
+    /** @var \Drupal\commerce_price\Entity\CurrencyInterface $currency */
+    $currency = Currency::load($currency_code);
+
+    // Calculate the amount in the form Saferpay expects it.
+    $amount_converted = intval(round(
+      $amount->getNumber() * pow(10, $currency->getFractionDigits())
+    ));
+
+    $data = [
+      'Refund' => [
+        'Description' => $this->t('Refund for order') . ' ' . $order->getOrderNumber(),
+        'Amount' => [
+          'Value' => $amount_converted,
+          'CurrencyCode' => $currency_code,
+        ],
+        'OrderId' => $order->uuid(),
+      ],
+      'CaptureReference' => [
+        'CaptureId' => $payment->getRemoteId(),
+      ],
+    ];
+
+    $saferpay_response = $this->doRequest('/Payment/v1/Transaction/Refund', $order->uuid(), $data);
+
+    if ($this->configuration['debug']) {
+      $this->logger->info(
+        'Transaction refund call finished. Request id (order uuid): %request_id. Order: %order_id. Status: %status.',
+        [
+          '%request_id' => $order->uuid(),
+          '%order_id' => $order->id(),
+          '%status' => $saferpay_response->Status,
+        ]
+      );
+    }
+
+    return $saferpay_response;
+  }
+
 
   /**
    * Does a post request using defaults parameters.
